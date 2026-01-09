@@ -33,3 +33,7 @@ Thumbs.db
 dist/
 build/
 *.egg-info/
+
+# Personal command reference (local only)
+COMMANDS.md
+cmd.md
