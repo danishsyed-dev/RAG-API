@@ -1,5 +1,7 @@
 # 🔍 RAG-API
 
+[![CI Pipeline](https://github.com/danishsyed-dev/RAG-API/actions/workflows/ci.yml/badge.svg)](https://github.com/danishsyed-dev/RAG-API/actions/workflows/ci.yml)
+
 A lightweight **Retrieval-Augmented Generation (RAG)** API built with FastAPI, ChromaDB, and Ollama. Query your knowledge base with natural language and get intelligent responses powered by local LLMs.
 
 ## ✨ Features
@@ -7,7 +9,8 @@ A lightweight **Retrieval-Augmented Generation (RAG)** API built with FastAPI, C
 - **🚀 Fast & Lightweight** - Built with FastAPI for high performance
 - **📚 Vector Search** - ChromaDB for efficient document retrieval
 - **🤖 Local LLM** - Uses Ollama with TinyLlama for fast, private inference
-- **➕ Dynamic Knowledge Base** - Add documents on-the-fly via API
+- **☸️ Kubernetes Ready** - Full K8s deployment manifests included
+- **🧪 CI/CD Pipeline** - Automated testing with GitHub Actions
 - **🔒 Privacy-First** - Everything runs locally, no external API calls
 
 ## 🛠️ Tech Stack
@@ -17,18 +20,21 @@ A lightweight **Retrieval-Augmented Generation (RAG)** API built with FastAPI, C
 | API Framework | [FastAPI](https://fastapi.tiangolo.com/) |
 | Vector Database | [ChromaDB](https://www.trychroma.com/) |
 | LLM | [Ollama](https://ollama.ai/) (TinyLlama) |
+| Container Orchestration | [Kubernetes](https://kubernetes.io/) / [Minikube](https://minikube.sigs.k8s.io/) |
+| CI/CD | [GitHub Actions](https://github.com/features/actions) |
 
 ## 📋 Prerequisites
 
 - Python 3.9+
 - [Ollama](https://ollama.ai/) installed and running
 - TinyLlama model pulled: `ollama pull tinyllama`
+- (Optional) [Minikube](https://minikube.sigs.k8s.io/) for Kubernetes deployment
 
 ## 🚀 Quick Start
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/YOUR_USERNAME/RAG-API.git
+git clone https://github.com/danishsyed-dev/RAG-API.git
 cd RAG-API
 ```
 
@@ -79,42 +85,85 @@ curl -X POST "http://localhost:8000/query?q=What is Kubernetes?"
 }
 ```
 
-### Add to Knowledge Base
-```http
-POST /add?text=your content here
-```
+## ☸️ Kubernetes Deployment
 
-**Example:**
+Deploy to a local Minikube cluster:
+
+### 1. Start Minikube
 ```bash
-curl -X POST "http://localhost:8000/add?text=Docker is a containerization platform."
+minikube start
 ```
 
-**Response:**
-```json
-{
-  "status": "success",
-  "message": "Content added to knowledge base",
-  "id": "uuid-here"
-}
+### 2. Build the image inside Minikube
+```bash
+minikube image build -t rag-api:latest .
+```
+
+### 3. Apply Kubernetes manifests
+```bash
+kubectl apply -f k8s/
+```
+
+### 4. Pull the LLM model
+```bash
+kubectl exec deploy/ollama -- ollama pull tinyllama
+```
+
+### 5. Access the API
+```bash
+kubectl port-forward svc/rag-api 8000:8000
+```
+
+Your API is now available at `http://127.0.0.1:8000`
+
+## 🧪 Testing
+
+Run semantic tests to verify the RAG system:
+
+```bash
+python semantic_test.py
+```
+
+### Mock LLM Mode (for CI)
+```bash
+USE_MOCK_LLM=1 uvicorn app:app --reload
 ```
 
 ## 📁 Project Structure
 
 ```
 RAG-API/
-├── app.py          # FastAPI application with endpoints
-├── embed.py        # Script to seed initial documents
-├── k8s.txt         # Sample knowledge document
+├── .github/
+│   └── workflows/
+│       └── ci.yml        # GitHub Actions CI pipeline
+├── k8s/
+│   ├── ollama.yaml       # Ollama deployment & service
+│   └── rag-api.yaml      # RAG API deployment & service
+├── app.py                # FastAPI application
+├── embed.py              # Script to seed initial documents
+├── semantic_test.py      # Semantic quality tests
+├── Dockerfile            # Container image definition
+├── k8s.txt               # Sample knowledge document
 ├── requirements.txt
 └── README.md
 ```
 
 ## 🔧 Configuration
 
-The application uses the following defaults:
-- **ChromaDB path**: `./db`
-- **Collection name**: `docs`
-- **LLM model**: `tinyllama`
+| Setting | Default | Description |
+|---------|---------|-------------|
+| ChromaDB path | `./db` | Vector database storage location |
+| Collection name | `docs` | ChromaDB collection name |
+| LLM model | `tinyllama` | Ollama model for inference |
+| Mock LLM | `USE_MOCK_LLM=0` | Set to `1` for CI testing |
+
+## 🔄 CI/CD Pipeline
+
+The project includes a GitHub Actions workflow that:
+1. Triggers on changes to `app.py`, `embed.py`, or `k8s.txt`
+2. Rebuilds embeddings
+3. Runs the API in mock mode
+4. Executes semantic tests to verify RAG quality
 
 ## 📄 License
 
@@ -126,4 +175,4 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ---
 
-Made with ❤️ using FastAPI, ChromaDB, and Ollama
+Made with ❤️ using FastAPI, ChromaDB, Ollama, and Kubernetes
