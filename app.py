@@ -2,9 +2,22 @@ from fastapi import FastAPI
 import chromadb
 import ollama
 
-app = FastAPI()
+app = FastAPI(title="RAG API", description="A RAG-based Question Answering API powered by Ollama and ChromaDB")
 chroma = chromadb.PersistentClient(path="./db")
 collection = chroma.get_or_create_collection("docs")
+
+@app.get("/")
+def root():
+    """Welcome endpoint with API information."""
+    return {
+        "message": "Welcome to the RAG API!",
+        "endpoints": {
+            "POST /query": "Ask a question (e.g., /query?q=What is Kubernetes?)",
+            "POST /add": "Add knowledge to the database (e.g., /add?text=Your text here)",
+            "GET /docs": "Interactive API documentation (Swagger UI)"
+        },
+        "status": "running"
+    }
 
 @app.post("/query")
 def query(q: str):
