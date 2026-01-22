@@ -2,10 +2,9 @@ name: RAG CI Pipeline
 
 on:
   push:
-    paths:
-      - 'k8s.txt'
-      - 'app.py'
-      - 'embed.py'
+    branches: [main]
+  workflow_dispatch:  # Allows manual triggering from GitHub UI
+
 
 jobs:
   test-and-build:
