@@ -1,0 +1,39 @@
+# Virtual environments
+venv/
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Database (re-created at build time)
+db/
+test_db/
+
+# Environment / secrets
+.env
+
+# Git & IDE
+.git/
+.gitignore
+.github/
+.vscode/
+.idea/
+
+# Tests (not needed in production image)
+tests/
+requirements-dev.txt
+semantic_test.py
+
+# Docs
+README.md
+COMMANDS.md
+CONTRIBUTING.md
+LICENSE
+cmd.md
+*.md
+
+# OS files
+Thumbs.db
+.DS_Store

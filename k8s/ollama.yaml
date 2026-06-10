@@ -19,12 +19,19 @@ spec:
         image: ollama/ollama:latest
         ports:
         - containerPort: 11434
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "512Mi"
+          limits:
+            cpu: "2000m"
+            memory: "2Gi"
         volumeMounts:
         - name: ollama-storage
           mountPath: /root/.ollama
       volumes:
       - name: ollama-storage
-        emptyDir: {} # Use PersistentVolumeClaim for persistence in production
+        emptyDir: {}  # Use PersistentVolumeClaim for persistence in production
 ---
 apiVersion: v1
 kind: Service

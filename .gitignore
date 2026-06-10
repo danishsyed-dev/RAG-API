@@ -11,6 +11,7 @@ ENV/
 
 # ChromaDB database (local data)
 db/
+test_db/
 
 # IDE settings
 .idea/

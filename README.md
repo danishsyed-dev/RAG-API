@@ -6,12 +6,15 @@ A lightweight **Retrieval-Augmented Generation (RAG)** API built with FastAPI, C
 
 ## ✨ Features
 
-- **🚀 Fast & Lightweight** - Built with FastAPI for high performance
-- **📚 Vector Search** - ChromaDB for efficient document retrieval
-- **🤖 Local LLM** - Uses Ollama with TinyLlama for fast, private inference
-- **☸️ Kubernetes Ready** - Full K8s deployment manifests included
-- **🧪 CI/CD Pipeline** - Automated testing with GitHub Actions
-- **🔒 Privacy-First** - Everything runs locally, no external API calls
+- **🚀 Fast & Lightweight** — Built with FastAPI for high performance
+- **📚 Vector Search** — ChromaDB for efficient document retrieval with chunking
+- **🤖 Local LLM** — Uses Ollama with TinyLlama for fast, private inference
+- **📄 Document CRUD** — Add, list, and delete documents via API
+- **🏥 Health Checks** — Built-in health endpoint for monitoring
+- **☸️ Kubernetes Ready** — Full K8s deployment manifests with probes & resource limits
+- **🧪 CI/CD Pipeline** — Automated testing with GitHub Actions & pytest
+- **🔒 Privacy-First** — Everything runs locally, no external API calls
+- **⚙️ Configurable** — All settings via environment variables or `.env` file
 
 ## 🛠️ Tech Stack
 
@@ -20,6 +23,7 @@ A lightweight **Retrieval-Augmented Generation (RAG)** API built with FastAPI, C
 | API Framework | [FastAPI](https://fastapi.tiangolo.com/) |
 | Vector Database | [ChromaDB](https://www.trychroma.com/) |
 | LLM | [Ollama](https://ollama.ai/) (TinyLlama) |
+| Configuration | [pydantic-settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/) |
 | Container Orchestration | [Kubernetes](https://kubernetes.io/) / [Minikube](https://minikube.sigs.k8s.io/) |
 | CI/CD | [GitHub Actions](https://github.com/features/actions) |
 
@@ -52,14 +56,23 @@ source venv/bin/activate
 ### 3. Install dependencies
 ```bash
 pip install -r requirements.txt
+
+# For development & testing
+pip install -r requirements-dev.txt
 ```
 
-### 4. Seed initial data (optional)
+### 4. Configure (optional)
+```bash
+cp .env.example .env
+# Edit .env to customize settings
+```
+
+### 5. Seed initial data
 ```bash
 python embed.py
 ```
 
-### 5. Start the server
+### 6. Start the server
 ```bash
 uvicorn app:app --reload
 ```
@@ -68,21 +81,84 @@ The API will be available at `http://localhost:8000`
 
 ## 📡 API Endpoints
 
-### Query Knowledge Base
+### Health Check
 ```http
-POST /query?q=your question here
-```
-
-**Example:**
-```bash
-curl -X POST "http://localhost:8000/query?q=What is Kubernetes?"
+GET /health
 ```
 
 **Response:**
 ```json
 {
-  "answer": "Kubernetes is a container orchestration platform used to manage containers at scale."
+  "status": "healthy",
+  "database": "healthy",
+  "llm": "healthy",
+  "document_count": 5
 }
+```
+
+### Query Knowledge Base
+```http
+POST /query
+Content-Type: application/json
+
+{
+  "query": "What is Kubernetes?",
+  "n_results": 3
+}
+```
+
+**Response:**
+```json
+{
+  "answer": "Kubernetes is a container orchestration platform used to manage containers at scale.",
+  "sources": [
+    {
+      "content": "Kubernetes is a container orchestration platform...",
+      "id": "k8s_chunk_0",
+      "metadata": {"source": "k8s.txt", "chunk_index": 0}
+    }
+  ]
+}
+```
+
+### Add Document
+```http
+POST /documents
+Content-Type: application/json
+
+{
+  "text": "Docker is a containerization platform.",
+  "id": "docker_intro",
+  "metadata": {"source": "manual"}
+}
+```
+
+### List Documents
+```http
+GET /documents?limit=10&offset=0
+```
+
+### Delete Document
+```http
+DELETE /documents/{doc_id}
+```
+
+## 📚 Document Ingestion
+
+The `embed.py` script supports flexible document ingestion with automatic chunking:
+
+```bash
+# Embed the default k8s.txt file
+python embed.py
+
+# Embed a specific file
+python embed.py --file docs/guide.txt
+
+# Embed all .txt and .md files in a directory
+python embed.py --dir ./documents
+
+# Customize chunking parameters
+python embed.py --file guide.txt --chunk-size 300 --overlap 50
 ```
 
 ## ☸️ Kubernetes Deployment
@@ -118,13 +194,19 @@ Your API is now available at `http://127.0.0.1:8000`
 
 ## 🧪 Testing
 
-Run semantic tests to verify the RAG system:
+### Run the full test suite
+```bash
+pytest tests/ -v
+```
 
+Tests run in mock LLM mode automatically — no Ollama server required.
+
+### Run a manual smoke test (requires running server)
 ```bash
 python semantic_test.py
 ```
 
-### Mock LLM Mode (for CI)
+### Mock LLM Mode (for CI/development)
 ```bash
 USE_MOCK_LLM=1 uvicorn app:app --reload
 ```
@@ -135,43 +217,64 @@ USE_MOCK_LLM=1 uvicorn app:app --reload
 RAG-API/
 ├── .github/
 │   └── workflows/
-│       └── ci.yml        # GitHub Actions CI pipeline
+│       └── ci.yml           # GitHub Actions CI pipeline
 ├── k8s/
-│   ├── ollama.yaml       # Ollama deployment & service
-│   └── rag-api.yaml      # RAG API deployment & service
-├── app.py                # FastAPI application
-├── embed.py              # Script to seed initial documents
-├── semantic_test.py      # Semantic quality tests
-├── Dockerfile            # Container image definition
-├── k8s.txt               # Sample knowledge document
-├── requirements.txt
+│   ├── ollama.yaml          # Ollama deployment & service
+│   └── rag-api.yaml         # RAG API deployment & service
+├── tests/
+│   ├── conftest.py          # Shared pytest fixtures
+│   ├── test_health.py       # Health endpoint tests
+│   ├── test_query.py        # Query endpoint tests
+│   ├── test_documents.py    # Document CRUD tests
+│   └── test_embed.py        # Chunking unit tests
+├── app.py                   # FastAPI application
+├── config.py                # Centralized configuration
+├── embed.py                 # Document ingestion with chunking
+├── semantic_test.py         # Legacy smoke test
+├── Dockerfile               # Container image definition
+├── .dockerignore            # Docker build exclusions
+├── .env.example             # Environment variable template
+├── k8s.txt                  # Sample knowledge document
+├── requirements.txt         # Production dependencies
+├── requirements-dev.txt     # Dev/test dependencies
+├── CONTRIBUTING.md          # Contribution guidelines
+├── LICENSE                  # MIT License
 └── README.md
 ```
 
-## 🔧 Configuration
+## ⚙️ Configuration
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| ChromaDB path | `./db` | Vector database storage location |
-| Collection name | `docs` | ChromaDB collection name |
-| LLM model | `tinyllama` | Ollama model for inference |
-| Mock LLM | `USE_MOCK_LLM=0` | Set to `1` for CI testing |
+All settings are configurable via environment variables or a `.env` file. See [`.env.example`](.env.example) for a full list.
+
+| Setting | Env Variable | Default | Description |
+|---------|-------------|---------|-------------|
+| ChromaDB path | `CHROMADB_PATH` | `./db` | Vector database storage location |
+| Collection name | `COLLECTION_NAME` | `docs` | ChromaDB collection name |
+| LLM model | `LLM_MODEL` | `tinyllama` | Ollama model for inference |
+| Ollama host | `OLLAMA_HOST` | `http://localhost:11434` | Ollama server URL |
+| Mock LLM | `USE_MOCK_LLM` | `0` | Set to `1` for CI testing |
+| CORS origins | `CORS_ORIGINS` | `*` | Comma-separated allowed origins |
+| Max query length | `MAX_QUERY_LENGTH` | `1000` | Maximum query string length |
+| Results per query | `DEFAULT_N_RESULTS` | `3` | Context chunks retrieved per query |
+| Chunk size | `CHUNK_SIZE` | `500` | Characters per document chunk |
+| Chunk overlap | `CHUNK_OVERLAP` | `50` | Overlapping characters between chunks |
 
 ## 🔄 CI/CD Pipeline
 
-The project includes a GitHub Actions workflow that:
-1. Triggers on changes to `app.py`, `embed.py`, or `k8s.txt`
-2. Rebuilds embeddings
-3. Runs the API in mock mode
-4. Executes semantic tests to verify RAG quality
+The GitHub Actions workflow:
+1. Triggers on pushes to `main` and pull requests
+2. Installs dependencies from `requirements-dev.txt`
+3. Rebuilds embeddings
+4. Runs the full pytest suite in mock LLM mode
+5. Can be triggered manually via `workflow_dispatch`
 
 ## 📄 License
 
-MIT License - feel free to use this project for your own purposes.
+[MIT License](LICENSE) — feel free to use this project for your own purposes.
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ---
 
