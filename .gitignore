@@ -38,3 +38,6 @@ build/
 # Personal command reference (local only)
 COMMANDS.md
 cmd.md
+
+# Project documentation
+PROJECT_KNOWLEDGE_BASE.md
