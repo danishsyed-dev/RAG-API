@@ -1,6 +1,16 @@
-# 🔍 RAG-API
+# <div align="center">
+#
+# <img src="assets/logo.svg" alt="RAG-API logo" width="140" />
+#
+#
+# <h1>🔁 RAG-API</h1>
+#
+# <p><em>Like a relay race — pass the baton, not the whole playbook.</em></p>
+#
+# [![CI Pipeline](https://github.com/danishsyed-dev/RAG-API/actions/workflows/ci.yml/badge.svg)](https://github.com/danishsyed-dev/RAG-API/actions/workflows/ci.yml)
+#
+# </div>
 
-[![CI Pipeline](https://github.com/danishsyed-dev/RAG-API/actions/workflows/ci.yml/badge.svg)](https://github.com/danishsyed-dev/RAG-API/actions/workflows/ci.yml)
 
 A lightweight **Retrieval-Augmented Generation (RAG)** API built with FastAPI, ChromaDB, and Ollama. Query your knowledge base with natural language and get intelligent responses powered by local LLMs.
 

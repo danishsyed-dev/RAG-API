@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240">
+  <defs>
+    <linearGradient id="g" x1="0" x2="1">
+      <stop offset="0%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#06b6d4" />
+    </linearGradient>
+  </defs>
+  <rect rx="36" width="240" height="240" fill="url(#g)" />
+  <g transform="translate(60,60)" fill="#fff" font-family="Segoe UI, Roboto, Arial" font-weight="700">
+    <text x="60" y="48" font-size="48" text-anchor="middle">🔁</text>
+    <text x="60" y="110" font-size="22" text-anchor="middle">RAG-API</text>
+  </g>
+</svg>
