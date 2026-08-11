@@ -1,292 +1,209 @@
+# RAG-API — Local Retrieval-Augmented Generation API
 
-<div align="center">
+A lightweight, privacy-first API to query a knowledge base with natural language using local LLMs and vector search.
 
-<img src="assets/logo.svg" alt="RAG-API logo" width="140" />
+## Introduction & Goals
 
-# RAG-API
+RAG-API lets you ingest plain text documents, create vector embeddings with ChromaDB, and answer natural-language queries using a local LLM (Ollama + TinyLlama) served behind a FastAPI HTTP API.
 
-**Like a relay race — pass the baton, not the whole playbook.**
+- Data: small technical and documentation files (example: `k8s.txt`) and any `.txt`/`.md` files you add and embed via `embed.py`.
+- Tools: `FastAPI`, `ChromaDB` (local), `Ollama` (TinyLlama), `pytest` for tests, and optional Kubernetes manifests for deployment.
+- What it does: ingests and chunks documents, stores embeddings in a local ChromaDB collection, retrieves nearest chunks for a query, and synthesizes an answer using a local LLM.
 
-Query your knowledge base with natural language and get intelligent responses powered by local LLMs.
+Conclusion (short): RAG-API provides a reproducible, local retrieval-augmented generation stack for private knowledge-base Q&A. It runs fully on a developer machine, reproduces embeddings deterministically from source files, and exposes a small HTTP API for queries and document management.
 
-[![CI Pipeline](https://github.com/danishsyed-dev/RAG-API/actions/workflows/ci.yml/badge.svg)](https://github.com/danishsyed-dev/RAG-API/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+**Goal 1:** Provide a private local RAG API that answers KB queries.
+**How I know it worked:** The `/health` endpoint returns `status: "healthy"` and `document_count >= 1`, and `pytest tests/ -q` completes successfully (exit code 0).
 
-</div>
+**Goal 2:** Reproducible ingestion and chunking pipeline.
+**How I know it worked:** Running `python embed.py` creates/updates the ChromaDB files under `./db` and `tests/test_embed.py` passes.
 
-A lightweight **Retrieval-Augmented Generation (RAG)** API built with FastAPI, ChromaDB, and Ollama. Query your knowledge base with natural language and get intelligent responses powered by local LLMs.
+**Goal 3:** Fast local feedback loop for development.
+**How I know it worked:** Health endpoint and simple queries return within a few seconds on a typical developer laptop (empirically verifiable with `time` on your machine).
 
-## ✨ Features
+> **Why this matters:** The project prioritizes privacy and reproducibility: everything runs locally, you can reproduce embeddings and QA behavior without external services, and the tests demonstrate correctness in CI and locally.
 
-- **🚀 Fast & Lightweight** — Built with FastAPI for high performance
-- **📚 Vector Search** — ChromaDB for efficient document retrieval with chunking
-- **🤖 Local LLM** — Uses Ollama with TinyLlama for fast, private inference
-- **📄 Document CRUD** — Add, list, and delete documents via API
-- **🏥 Health Checks** — Built-in health endpoint for monitoring
-- **☸️ Kubernetes Ready** — Full K8s deployment manifests with probes & resource limits
-- **🧪 CI/CD Pipeline** — Automated testing with GitHub Actions & pytest
-- **🔒 Privacy-First** — Everything runs locally, no external API calls
-- **⚙️ Configurable** — All settings via environment variables or `.env` file
+## Architecture
 
-## 🛠️ Tech Stack
+View the architecture diagram: [images/architecture.svg](images/architecture.svg#L1).
 
-| Component | Technology |
-|-----------|------------|
-| API Framework | [FastAPI](https://fastapi.tiangolo.com/) |
-| Vector Database | [ChromaDB](https://www.trychroma.com/) |
-| LLM | [Ollama](https://ollama.ai/) (TinyLlama) |
-| Configuration | [pydantic-settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/) |
-| Container Orchestration | [Kubernetes](https://kubernetes.io/) / [Minikube](https://minikube.sigs.k8s.io/) |
-| CI/CD | [GitHub Actions](https://github.com/features/actions) |
+Top-level flow: `embed.py` (ingest & chunk) → ChromaDB (`./db`) → `app.py` (FastAPI) → Ollama (TinyLlama) for local synthesis.
 
-## 📋 Prerequisites
+## Contents
 
-- Python 3.9+
-- [Ollama](https://ollama.ai/) installed and running
-- TinyLlama model pulled: `ollama pull tinyllama`
-- (Optional) [Minikube](https://minikube.sigs.k8s.io/) for Kubernetes deployment
+- [The Data Set](#the-data-set)
+- [Constraints](#constraints)
+- [Used Tools](#used-tools)
+  - [Connect](#connect)
+  - [Buffer](#buffer)
+  - [Processing](#processing)
+  - [Storage](#storage)
+  - [Visualization](#visualization)
+- [Pipelines](#pipelines)
+  - [Stream Processing](#stream-processing)
+  - [Batch Processing](#batch-processing)
+  - [Visualizations](#visualizations)
+- [Demo](#demo)
+- [What Breaks](#what-breaks)
+- [Conclusion](#conclusion)
+- [Follow Me On](#follow-me-on)
+- [Appendix](#appendix)
 
-## 🚀 Quick Start
+## The Data Set
 
-### 1. Clone the repository
+- The repository ships with small sample documents such as `k8s.txt`. The intent is to index technical documentation and small knowledge files (markdown, plain text).
+- Choice: simple, human-readable docs make it easy to inspect chunks and test retrieval quality.
+- Problematic: the project is not designed for high-volume streaming data or large binary blobs.
+- Goal: enable reliable Q&A over a small corpus and provide a straightforward path to scale later.
+
+### How much data is it
+
+Concrete example from this repository:
+
+`k8s.txt` (sample file) contains a single line: "Kubernetes is a container orchestration platform used to manage containers at scale." — 84 characters (~84 bytes). With the default `CHUNK_SIZE=500` this yields 1 chunk and therefore 1 embedding in ChromaDB.
+
+If you add 1,000 similar small documents (≈1 KB each), you'd have ~1,000 chunks; at an estimated 4 KB per serialized embedding that's ~4 MB of vector storage — still small for a single-machine dev setup. Use sharding or an external vector host when you reach tens or hundreds of thousands of chunks.
+
+## Constraints
+
+- Budget: development on a laptop / free-tier resources.
+- Compute: designed to run on a developer machine or a small VM; Ollama inference requires the model locally and enough RAM for TinyLlama.
+- Data you do not control: none in the sample; external integrations would impose rate limits.
+- Time: iterative project developed over a few days; tests and CI provide automated checks.
+
+## Used Tools
+
+This project picks small, local-first components so the whole stack can run without cloud services.
+
+### Connect
+
+No external ingestion service — documents are added via `embed.py` (batch) or the document API endpoints. See [embed.py](embed.py#L1).
+
+Setup (one-liner):
+
 ```bash
-git clone https://github.com/danishsyed-dev/RAG-API.git
-cd RAG-API
+python embed.py --file k8s.txt
 ```
 
-### 2. Create virtual environment
+Why: simple, file-driven ingestion keeps the pipeline reproducible and easy to debug. Rejected alternatives: webhook-based ingestion (adds operational complexity) and cloud-only ingestion (breaks local reproducibility).
+
+### Buffer
+
+None — at this scale a message queue wasn't necessary. For higher throughput, Kafka or Pub/Sub would be considered.
+
+### Processing
+
+ - Document chunking & embedding: `embed.py` (Python). See [embed.py](embed.py#L1).
+ - API & orchestration: `app.py` (FastAPI) serves endpoints for health, queries, and document CRUD. See [app.py](app.py#L1).
+
+Setup (one-liners):
+
 ```bash
-python -m venv venv
+# Run tests
+pytest tests/ -q
 
-# Windows
-venv\Scripts\activate
-
-# macOS/Linux
-source venv/bin/activate
+# Run API (mock LLM mode for development/CI)
+USE_MOCK_LLM=1 uvicorn app:app --reload
 ```
 
-### 3. Install dependencies
+Why: Python + FastAPI offers fast developer feedback and easy testability. Considered alternatives: a heavier microservices approach (unnecessary at this scale) and hosted LLM APIs (rejected for privacy reasons).
+
+### Storage
+
+ - ChromaDB local collection stored under `./db` (sqlite + collection files). Configuration in [config.py](config.py#L1).
+
+Setup (one-liner):
+
 ```bash
-pip install -r requirements.txt
-
-# For development & testing
-pip install -r requirements-dev.txt
+# Storage is created automatically when running `embed.py`. No manual DB init required.
+python embed.py --file k8s.txt
 ```
 
-### 4. Configure (optional)
+Why: ChromaDB provides a lightweight, embeddable vector store suitable for single-machine workflows. Considered alternatives: FAISS (more low-level), Pinecone (hosted) — Chroma balances ease-of-use and local operation.
+
+### Visualization
+
+- The primary interface is the HTTP API (`/query`, `/documents`, `/health`). A simple frontend could be added, but is intentionally out of scope.
+
+## Pipelines
+
+High-level:
+
+- Batch ingestion: `python embed.py --file k8s.txt` reads the file, chunks text, computes embeddings, and writes them to the ChromaDB collection. Key code: [embed.py](embed.py#L1).
+- Query flow: `POST /query` in `app.py` looks up nearest neighbors in ChromaDB and formats a prompt for Ollama. Key code: [app.py](app.py#L1).
+
+Error handling: bad documents are skipped with logging during embedding; the API returns safe errors for malformed requests. Tests exercise the main paths (`tests/`).
+
+### Stream Processing
+
+Not implemented — this project uses batch ingestion. For streaming, you could add a small consumer that watches a directory or a message queue and calls the embed endpoint.
+
+### Batch Processing
+
+Implemented via `embed.py`. The script supports file, directory, chunk-size, and overlap options.
+
+### Visualizations
+
+None included. The API returns JSON you can wire to any frontend or BI tool.
+
+## Demo
+
+- Start Ollama (if using real LLM): install and run Ollama, pull `tinyllama`.
+- Seed data: `python embed.py`
+- Run the app: `uvicorn app:app --reload`
+- Try: `curl -X POST localhost:8000/query -H "Content-Type: application/json" -d '{"query":"What is Kubernetes?","n_results":3}'`
+
+### Sample Query & Response (canned)
+
+Request:
+
 ```bash
-cp .env.example .env
-# Edit .env to customize settings
+curl -s -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{"query":"What is Kubernetes?","n_results":3}'
 ```
 
-### 5. Seed initial data
-```bash
-python embed.py
-```
+Response (example):
 
-### 6. Start the server
-```bash
-uvicorn app:app --reload
-```
-
-The API will be available at `http://localhost:8000`
-
-## 📡 API Endpoints
-
-### Health Check
-```http
-GET /health
-```
-
-**Response:**
-```json
-{
-  "status": "healthy",
-  "database": "healthy",
-  "llm": "healthy",
-  "document_count": 5
-}
-```
-
-### Query Knowledge Base
-```http
-POST /query
-Content-Type: application/json
-
-{
-  "query": "What is Kubernetes?",
-  "n_results": 3
-}
-```
-
-**Response:**
 ```json
 {
   "answer": "Kubernetes is a container orchestration platform used to manage containers at scale.",
   "sources": [
     {
-      "content": "Kubernetes is a container orchestration platform...",
       "id": "k8s_chunk_0",
+      "content": "Kubernetes is a container orchestration platform used to manage containers at scale.",
       "metadata": {"source": "k8s.txt", "chunk_index": 0}
     }
   ]
 }
 ```
 
-### Add Document
-```http
-POST /documents
-Content-Type: application/json
+## What Breaks
 
-{
-  "text": "Docker is a containerization platform.",
-  "id": "docker_intro",
-  "metadata": {"source": "manual"}
-}
-```
+- **What breaks first:** Large volumes of documents (100k+ chunks) will increase memory and IO pressure on ChromaDB; solution: shard collections or move to a vector-hosted solution.
+- **What I skipped:** A web UI and production-grade auth. Both are omitted to keep the repo focused and small.
+- **Risk accepted:** Running the LLM locally assumes you will manage model storage and RAM; if that fails, switch to a remote LLM.
 
-### List Documents
-```http
-GET /documents?limit=10&offset=0
-```
+If the data touches people, add a short privacy note here (not applicable to the sample docs included).
 
-### Delete Document
-```http
-DELETE /documents/{doc_id}
-```
+## Conclusion
 
-## 📚 Document Ingestion
+RAG-API is a compact, local-first retrieval-augmented generation stack designed for experimentation and private KB question answering. The main lessons: keep chunking and metadata predictable, test embeddings and retrieval logic, and prefer small, reproducible components when privacy is a concern.
 
-The `embed.py` script supports flexible document ingestion with automatic chunking:
+Key takeaways:
+- Tests (`pytest`) are the single best way to ensure the ingestion and query behavior remain stable.
+- Partitioning and metadata choices early make queries much faster to tune later.
 
-```bash
-# Embed the default k8s.txt file
-python embed.py
+## Follow Me On
 
-# Embed a specific file
-python embed.py --file docs/guide.txt
+Github : https://www.github.com/danishsyed-dev
 
-# Embed all .txt and .md files in a directory
-python embed.py --dir ./documents
+## Appendix
 
-# Customize chunking parameters
-python embed.py --file guide.txt --chunk-size 300 --overlap 50
-```
-
-## ☸️ Kubernetes Deployment
-
-Deploy to a local Minikube cluster:
-
-### 1. Start Minikube
-```bash
-minikube start
-```
-
-### 2. Build the image inside Minikube
-```bash
-minikube image build -t rag-api:latest .
-```
-
-### 3. Apply Kubernetes manifests
-```bash
-kubectl apply -f k8s/
-```
-
-### 4. Pull the LLM model
-```bash
-kubectl exec deploy/ollama -- ollama pull tinyllama
-```
-
-### 5. Access the API
-```bash
-kubectl port-forward svc/rag-api 8000:8000
-```
-
-Your API is now available at `http://127.0.0.1:8000`
-
-## 🧪 Testing
-
-### Run the full test suite
-```bash
-pytest tests/ -v
-```
-
-Tests run in mock LLM mode automatically — no Ollama server required.
-
-### Run a manual smoke test (requires running server)
-```bash
-python semantic_test.py
-```
-
-### Mock LLM Mode (for CI/development)
-```bash
-USE_MOCK_LLM=1 uvicorn app:app --reload
-```
-
-## 📁 Project Structure
-
-```
-RAG-API/
-├── .github/
-│   └── workflows/
-│       └── ci.yml           # GitHub Actions CI pipeline
-├── k8s/
-│   ├── ollama.yaml          # Ollama deployment & service
-│   └── rag-api.yaml         # RAG API deployment & service
-├── tests/
-│   ├── conftest.py          # Shared pytest fixtures
-│   ├── test_health.py       # Health endpoint tests
-│   ├── test_query.py        # Query endpoint tests
-│   ├── test_documents.py    # Document CRUD tests
-│   └── test_embed.py        # Chunking unit tests
-├── app.py                   # FastAPI application
-├── config.py                # Centralized configuration
-├── embed.py                 # Document ingestion with chunking
-├── semantic_test.py         # Legacy smoke test
-├── Dockerfile               # Container image definition
-├── .dockerignore            # Docker build exclusions
-├── .env.example             # Environment variable template
-├── k8s.txt                  # Sample knowledge document
-├── requirements.txt         # Production dependencies
-├── requirements-dev.txt     # Dev/test dependencies
-├── CONTRIBUTING.md          # Contribution guidelines
-├── LICENSE                  # MIT License
-└── README.md
-```
-
-## ⚙️ Configuration
-
-All settings are configurable via environment variables or a `.env` file. See [`.env.example`](.env.example) for a full list.
-
-| Setting | Env Variable | Default | Description |
-|---------|-------------|---------|-------------|
-| ChromaDB path | `CHROMADB_PATH` | `./db` | Vector database storage location |
-| Collection name | `COLLECTION_NAME` | `docs` | ChromaDB collection name |
-| LLM model | `LLM_MODEL` | `tinyllama` | Ollama model for inference |
-| Ollama host | `OLLAMA_HOST` | `http://localhost:11434` | Ollama server URL |
-| Mock LLM | `USE_MOCK_LLM` | `0` | Set to `1` for CI testing |
-| CORS origins | `CORS_ORIGINS` | `*` | Comma-separated allowed origins |
-| Max query length | `MAX_QUERY_LENGTH` | `1000` | Maximum query string length |
-| Results per query | `DEFAULT_N_RESULTS` | `3` | Context chunks retrieved per query |
-| Chunk size | `CHUNK_SIZE` | `500` | Characters per document chunk |
-| Chunk overlap | `CHUNK_OVERLAP` | `50` | Overlapping characters between chunks |
-
-## 🔄 CI/CD Pipeline
-
-The GitHub Actions workflow:
-1. Triggers on pushes to `main` and pull requests
-2. Installs dependencies from `requirements-dev.txt`
-3. Rebuilds embeddings
-4. Runs the full pytest suite in mock LLM mode
-5. Can be triggered manually via `workflow_dispatch`
-
-## 📄 License
-
-[MIT License](LICENSE) — feel free to use this project for your own purposes.
-
-## 🤝 Contributing
-
-Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+- Run tests: `pytest tests/ -v`
+- Embed a file: `python embed.py --file k8s.txt`
+- Start server (mock LLM mode for CI): `USE_MOCK_LLM=1 uvicorn app:app --reload`
 
 ---
 
-Made with ❤️ using FastAPI, ChromaDB, Ollama, and Kubernetes
+Files of interest: [app.py](app.py#L1), [embed.py](embed.py#L1), [config.py](config.py#L1), tests: [tests/](tests/)
