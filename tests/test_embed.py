@@ -1,6 +1,21 @@
 """Unit tests for the embed module's chunking logic."""
 
+from types import SimpleNamespace
+
+import embed
 from embed import chunk_text
+
+
+class DummyCollection:
+    def __init__(self):
+        self.documents = None
+        self.ids = None
+        self.metadatas = None
+
+    def upsert(self, documents, ids, metadatas):
+        self.documents = documents
+        self.ids = ids
+        self.metadatas = metadatas
 
 
 def test_chunk_small_text():
@@ -54,3 +69,24 @@ def test_chunk_size_one():
     """Edge case: chunk_size of 1 should still work without infinite loop."""
     chunks = chunk_text("abc", chunk_size=1, overlap=0)
     assert len(chunks) >= 1
+
+
+def test_embed_file_uses_anydoc_for_rich_documents(tmp_path, monkeypatch):
+    """Rich document formats should be converted through AnyDoc before embedding."""
+    doc_path = tmp_path / "report.docx"
+    doc_path.write_bytes(b"fake office document")
+
+    monkeypatch.setattr(
+        embed,
+        "anydoc",
+        SimpleNamespace(to_markdown=lambda path: "Converted markdown content"),
+    )
+
+    collection = DummyCollection()
+    count = embed.embed_file(str(doc_path), collection, chunk_size=500, overlap=50)
+
+    assert count == 1
+    assert collection.documents == ["Converted markdown content"]
+    assert collection.ids == ["report_chunk_0"]
+    assert collection.metadatas[0]["source_format"] == "docx"
+    assert collection.metadatas[0]["ingest_mode"] == "anydoc"

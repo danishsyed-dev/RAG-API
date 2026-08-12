@@ -19,13 +19,42 @@ import chromadb
 
 from config import settings
 
+try:
+    import anydoc
+except ImportError:
+    anydoc = None
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(levelname)-8s  %(name)s — %(message)s",
 )
 logger = logging.getLogger("rag-embed")
 
-SUPPORTED_EXTENSIONS = {".txt", ".md"}
+TEXT_EXTENSIONS = {".txt", ".md"}
+ANYDOC_EXTENSIONS = {
+    ".doc",
+    ".docm",
+    ".docx",
+    ".epub",
+    ".odp",
+    ".ods",
+    ".odt",
+    ".pdf",
+    ".ppt",
+    ".pptm",
+    ".pptx",
+    ".pps",
+    ".ppsm",
+    ".ppsx",
+    ".pot",
+    ".rtf",
+    ".xls",
+    ".xlsb",
+    ".xlsm",
+    ".xlsx",
+    ".csv",
+}
+SUPPORTED_EXTENSIONS = TEXT_EXTENSIONS | ANYDOC_EXTENSIONS
 
 
 # ---------------------------------------------------------------------------
@@ -78,6 +107,32 @@ def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]
 # ---------------------------------------------------------------------------
 # Embedding helpers
 # ---------------------------------------------------------------------------
+def load_document_text(path: Path) -> str | None:
+    """Load text from a supported file, converting rich formats to Markdown."""
+    suffix = path.suffix.lower()
+
+    if suffix in TEXT_EXTENSIONS:
+        with open(path, "r", encoding="utf-8") as fh:
+            return fh.read()
+
+    if suffix in ANYDOC_EXTENSIONS:
+        if anydoc is None:
+            logger.warning(
+                "Skipping %s because firecrawl-anydoc is not installed.",
+                path,
+            )
+            return None
+
+        try:
+            return anydoc.to_markdown(str(path))
+        except Exception as exc:
+            logger.warning("Failed to convert %s with AnyDoc: %s", path, exc)
+            return None
+
+    logger.warning("Skipping unsupported file type: %s", path)
+    return None
+
+
 def embed_file(
     filepath: str,
     collection,
@@ -93,8 +148,9 @@ def embed_file(
 
     logger.info("Processing: %s", path)
 
-    with open(path, "r", encoding="utf-8") as fh:
-        text = fh.read()
+    text = load_document_text(path)
+    if text is None:
+        return 0
 
     if not text.strip():
         logger.warning("Skipping empty file: %s", path)
@@ -115,6 +171,8 @@ def embed_file(
                 "source": path.name,
                 "chunk_index": idx,
                 "total_chunks": len(chunks),
+                "source_format": path.suffix.lower().lstrip("."),
+                "ingest_mode": "anydoc" if path.suffix.lower() in ANYDOC_EXTENSIONS else "plain_text",
             }
         )
 
