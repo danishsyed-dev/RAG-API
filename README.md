@@ -32,11 +32,14 @@ Conclusion: the current project is a self-contained local RAG stack for document
 
 ## Architecture
 
-View the architecture diagram: [images/architecture.svg](images/architecture.svg#L1).
+View the architecture diagram:
+
+![Architecture diagram](images/architecture.svg)
 
 Top-level flow: `embed.py` (convert, ingest, and chunk) → ChromaDB (`./db`) → `app.py` (FastAPI) → Ollama (TinyLlama) for local synthesis.
 
 ## Contents
+
 
 - [Current Scope](#current-scope)
 - [Supported Formats](#supported-formats)
